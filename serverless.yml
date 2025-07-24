@@ -1,0 +1,53 @@
+service: hris-backend
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  environment:
+    JWT_SECRET: ${env:JWT_SECRET}
+    EMPLOYEES_TABLE: ${env:EMPLOYEES_TABLE}
+    ONBOARDING_TABLE: ${env:ONBOARDING_TABLE}
+    LEAVE_TABLE: ${env:LEAVE_TABLE}
+    PAYROLL_TABLE: ${env:PAYROLL_TABLE}
+    ASSETS_TABLE: ${env:ASSETS_TABLE}
+    CANDIDATES_TABLE: ${env:CANDIDATES_TABLE}
+    TRAININGS_TABLE: ${env:TRAININGS_TABLE}
+    DOCUMENTS_TABLE: ${env:DOCUMENTS_TABLE}
+    S3_BUCKET: ${env:S3_BUCKET}
+
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+        - dynamodb:Scan
+        - dynamodb:DeleteItem
+        - dynamodb:UpdateItem
+      Resource:
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:EMPLOYEES_TABLE}
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:ONBOARDING_TABLE}
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:LEAVE_TABLE}
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:PAYROLL_TABLE}
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:ASSETS_TABLE}
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:CANDIDATES_TABLE}
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:TRAININGS_TABLE}
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:DOCUMENTS_TABLE}
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+        - s3:GetObject
+        - s3:PutObjectAcl
+      Resource: arn:aws:s3:::${env:S3_BUCKET}/*
+
+functions:
+  app:
+    handler: handler.handler
+    events:
+      - http:
+          path: /{proxy+}
+          method: any
+
+plugins:
+  - serverless-offline
