@@ -8,9 +8,11 @@ const dynamo = require('../services/db');
 router.post('/request', verifyToken, async (req, res) => {
     // Logic to submit leave request
     try{
+        //GET REQUEST BODY
         const {startDate, endDate, leaveType, reason} = req.body;
         const employeeId = req.user.id;
 
+        //CHECK IF ALL REQUIRED FIELDS ARE PRESENT
         if(!startDate || !endDate || !leaveType || !reason){
             return res.status(400).json({
                 success: false,
@@ -18,10 +20,12 @@ router.post('/request', verifyToken, async (req, res) => {
             });
         }
 
+        //CONVERT STRING TO DATE OBJECT
         const start = new Date(startDate);
         const end = new Date(endDate);
         const today = new Date();
 
+        //CHECK IF START DATE IS TODAY...
         if(start <= today){
             return res.status(400).json({
                 success: false,
@@ -29,6 +33,7 @@ router.post('/request', verifyToken, async (req, res) => {
             });
         }
 
+        //CHECK IF END DATE IS BEFORE START DATE
         if(end <= start){
             return res.status(400).json({
                 success: false,
@@ -36,9 +41,11 @@ router.post('/request', verifyToken, async (req, res) => {
             });
         }
 
+        //CALCULATE LEAVE DAYS
         const leaveDays = getDateDiffInDays(start, end);
         const leaveBalance = await getLeaveBalance(employeeId, leaveType);
-
+        
+        //CHECK IF LEAVE BALANCE IS SUFFICIENT
         if(leaveBalance < leaveDays){
             return res.status(400).json({
                 success: false,
@@ -46,6 +53,7 @@ router.post('/request', verifyToken, async (req, res) => {
             });
         }
 
+        //CREATE LEAVE REQUEST OBJECT
         const leaveRequest = {
             id: `leave_${Date.now()}_${employeeId}`,
             employeeId,
@@ -59,17 +67,20 @@ router.post('/request', verifyToken, async (req, res) => {
             managerId: req.user.managerId || null
         };
 
+        //STORE LEAVE REQUEST IN DYNAMODB
         await dynamo.put({
             TableName: 'LeaveRequests',
             Item: leaveRequest
         }).promise();
 
+        //RETURN SUCCESS RESPONSE
         res.status(201).json({
             success: true,
             message: 'Leave request submitted successfully',
             data: leaveRequest
         });
     }catch (error){
+        //HANDLING ERRORS
         console.error('Error while submitting leave request:', error);
         res.status(500).json({
             success: false,
@@ -82,10 +93,12 @@ router.post('/request', verifyToken, async (req, res) => {
 router.put('/:id/approve', verifyToken, checkAccess(4), async (req, res) => {
     // Logic to approve leave request
     try{
+        //GET REQUEST BODY
         const {id} = req.params;
         const {status, comments} = req.body;
         const managerId = req.user.id;
 
+        //CHECK IF STATUS IS VALID
         if(!status || !['approved', 'rejected'].includes(status)){
             return res.status(400).json({
                 success: false,
@@ -93,11 +106,13 @@ router.put('/:id/approve', verifyToken, checkAccess(4), async (req, res) => {
             });
         }
 
+        //GET LEAVE REQUEST FROM DYNAMODB
         const result = await dynamo.get({
             TableName: 'LeaveRequests',
             Key: {id}
         }).promise();
 
+        //CHECK IF LEAVE REQUEST EXISTS
         if(!result.Item){
             return res.status(404).json({
                 success: false,
@@ -107,6 +122,7 @@ router.put('/:id/approve', verifyToken, checkAccess(4), async (req, res) => {
 
         const leaveRequest = result.Item;
 
+        //CHECK IF LEAVE REQUEST IS PENDING
         if(leaveRequest.status !== 'pending'){
             return res.status(403).json({
                 success: false,
@@ -114,6 +130,7 @@ router.put('/:id/approve', verifyToken, checkAccess(4), async (req, res) => {
             });
         }
 
+        //UPDATE LEAVE REQUEST STATUS
         const updateParams = {
             TableName: 'LeaveRequests',
             Key: { id },
@@ -134,16 +151,19 @@ router.put('/:id/approve', verifyToken, checkAccess(4), async (req, res) => {
 
         await dynamo.update(updateParams).promise();
 
+        //UPDATE LEAVE BALANCE IF LEAVE IS APPROVED
         if(status === 'approved'){
             await updateLeaveBalance(employeeId, leaveRequest.leaveType, leaveRequest.leaveDays);
         }
 
+        //RETURN SUCCESS RESPONSE
         res.json({
             success: true,
             message: `Leave request approved successfully, status ${status}`,
             data: {id, status, approvedBy: managerId }
         });
     }catch (error){
+        //HANDLING ERRORS
         console.error('Error while approving leave request:', error);
         res.status(500).json({
             success: false,
@@ -156,9 +176,11 @@ router.put('/:id/approve', verifyToken, checkAccess(4), async (req, res) => {
 router.get('/history/:empId', verifyToken, async (req, res) => {
     // Logic to fetch leave history
     try{
+        //GET REQUEST BODY
         const {empId} = req.params;
         const requestingUserId = req.user.id;
 
+        //CHECK IF USER HAS ACCESS TO FETCH LEAVE HISTORY
         if(req.user.role !== 'admin' && requestingUserId !== empId){
             return res.status(403).json({
                 success: false,
@@ -166,6 +188,7 @@ router.get('/history/:empId', verifyToken, async (req, res) => {
             });
         }
 
+        //GET LEAVE REQUESTS FROM DYNAMODB
         const result = await dynamo.query({
             TableName: 'LeaveRequests',
             IndexName: 'EmployeeIdIndex',
@@ -175,8 +198,10 @@ router.get('/history/:empId', verifyToken, async (req, res) => {
             }
         }).promise();
 
+        //GET LEAVE BALANCE
         const leaveBalance = await getLeaveBalance(empId);
 
+        //RETURN SUCCESS RESPONSE
         res.json({
             success: true,
             data:{
@@ -185,6 +210,7 @@ router.get('/history/:empId', verifyToken, async (req, res) => {
             }
         }); 
     }catch (error){
+        //HANDLING ERRORS
         console.error('Error fetching leave history:', error);
         res.status(500).json({
             success: false,
@@ -197,9 +223,11 @@ router.get('/history/:empId', verifyToken, async (req, res) => {
 router.post('/attendance/log', verifyToken, async (req, res) => {
     // Logic to log attendance
     try {
+    //GET REQUEST BODY
     const {type, location, notes} = req.body;
     const employeeId = req.user.id;
 
+    //CHECK IF ATTENDANCE TYPE IS VALID
     if(!type || !['in', 'out'].includes(type)){
         return res.status(400).json({
             success: false,
@@ -207,9 +235,11 @@ router.post('/attendance/log', verifyToken, async (req, res) => {
         });
     }
 
+    //GET CURRENT DATE
     const now = new Date();
     const today = now.toISOString().split('T')[0];
 
+    //CHECK IF EMPLOYEE HAS ALREADY PUNCHED IN OR OUT TODAY
     const existingLog = await dynamo.query({
         TableName: 'AttendanceLogs',
         IndexName: 'EmployeeDateIndex',
@@ -223,9 +253,12 @@ router.post('/attendance/log', verifyToken, async (req, res) => {
         }
     }).promise();
 
+    //GET TODAY'S ATTENDANCE LOGS
     const todayLogs = existingLog.Items || [];
 
+    //CHECK IF EMPLOYEE HAS PUNCHED IN OR OUT TODAY 
     if(type === 'in'){
+        //CHECK IF EMPLOYEE HAS PUNCHED IN TODAY
         const alreadyIn = todayLogs.some(Log => Log.type === 'in');
         if(alreadyIn) {
             return res.status(400).json({   
@@ -234,6 +267,7 @@ router.post('/attendance/log', verifyToken, async (req, res) => {
             });
         }
     }else{
+        //CHECK IF EMPLOYEE HAS PUNCHED OUT TODAY
         const punchedIN = todayLogs.some(Log => Log.type === 'in')
         const alreadyPunchedOut = todayLogs.some(log => log.type === 'out');
 
@@ -252,6 +286,7 @@ router.post('/attendance/log', verifyToken, async (req, res) => {
         }
     }
 
+    //CREATE ATTENDANCE LOG OBJECT
     const attendanceLog = {
         id: `attendance_${Date.now()}_${employeeId}`,
         employeeId,
@@ -262,11 +297,13 @@ router.post('/attendance/log', verifyToken, async (req, res) => {
         notes: notes || null
     };
 
+    //STORE ATTENDANCE LOG IN DYNAMODB
     await dynamo.put({
         TableName: 'AttendanceLogs',
         Item: attendanceLog
     }).promise();
 
+    //RETURN SUCCESS RESPONSE
     res.status(201).json({
         success: true,
         message: `Attendance punched ${type}`,
@@ -274,6 +311,7 @@ router.post('/attendance/log', verifyToken, async (req, res) => {
     });
 
 } catch (error){
+        //HANDLING ERRORS
         console.error('Error while leave history', error);
         res.status(500).json({
             success: false,
@@ -285,8 +323,9 @@ router.post('/attendance/log', verifyToken, async (req, res) => {
 
 //Helper Functions
 
+//GET DATE DIFFERENCE IN DAYS
 function getDateDiffInDays(startDate, endDate) {
-    // Remove the time portion by setting time to 00:00:00
+    // Remove the time portion by setting time to 00:00:00  (to avoid time zone issues)
     const start = new Date(startDate.setHours(0, 0, 0, 0));
     const end = new Date(endDate.setHours(0, 0, 0, 0));
   
@@ -296,6 +335,7 @@ function getDateDiffInDays(startDate, endDate) {
     return diffInDays;
 }
 
+//GET LEAVE BALANCE
 async function getLeaveBalance(employeeId, leaveType = null) {
     try {
         const result = await dynamo.get({
@@ -329,6 +369,7 @@ async function getLeaveBalance(employeeId, leaveType = null) {
     }
 }
 
+//UPDATE LEAVE BALANCE
 async function updateLeaveBalance(employeeId, leaveType, daysUsed) {
     try {
         const updateParams = {
