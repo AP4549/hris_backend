@@ -122,6 +122,14 @@ router.put('/:id/approve', verifyToken, checkAccess(4), async (req, res) => {
 
         const leaveRequest = result.Item;
 
+        //CHECK IF MANAGER HAS ACCESS TO APPROVE LEAVE REQUEST
+        if (leaveRequest.managerId && leaveRequest.managerId !== managerId) {
+            return res.status(403).json({
+              success: false,
+              message: 'You are not authorized to approve this leave request.'
+            });
+        }
+
         //CHECK IF LEAVE REQUEST IS PENDING
         if(leaveRequest.status !== 'pending'){
             return res.status(403).json({
