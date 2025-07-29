@@ -7,15 +7,18 @@ provider:
   region: us-east-1
   environment:
     JWT_SECRET: ${env:JWT_SECRET}
-    EMPLOYEES_TABLE: ${env:EMPLOYEES_TABLE}
-    ONBOARDING_TABLE: ${env:ONBOARDING_TABLE}
-    LEAVE_TABLE: ${env:LEAVE_TABLE}
-    PAYROLL_TABLE: ${env:PAYROLL_TABLE}
-    ASSETS_TABLE: ${env:ASSETS_TABLE}
-    CANDIDATES_TABLE: ${env:CANDIDATES_TABLE}
-    TRAININGS_TABLE: ${env:TRAININGS_TABLE}
-    DOCUMENTS_TABLE: ${env:DOCUMENTS_TABLE}
-    S3_BUCKET: ${env:S3_BUCKET}
+    HRIS_EMPLOYEES_TABLE: ${env:HRIS_EMPLOYEES_TABLE, 'hris_employees'}
+    HRIS_REQUESTS_TABLE: ${env:HRIS_REQUESTS_TABLE, 'hris_requests'}
+    HRIS_DOCUMENTS_TABLE: ${env:HRIS_DOCUMENTS_TABLE, 'hris_documents'}
+    HRIS_POLICIES_TABLE: ${env:HRIS_POLICIES_TABLE, 'hris_policies'}
+    HRIS_JOBS_TABLE: ${env:HRIS_JOBS_TABLE, 'hris_jobs'}
+    HRIS_ANALYTICS_TABLE: ${env:HRIS_ANALYTICS_TABLE, 'hris_analytics'}
+    HRIS_TRAININGS_TABLE: ${env:HRIS_TRAININGS_TABLE, 'hris_trainings'}
+    HRIS_ASSETS_TABLE: ${env:HRIS_ASSETS_TABLE, 'hris_assets'}
+    HRIS_PERMISSIONS_TABLE: ${env:HRIS_PERMISSIONS_TABLE, 'hris_permissions'}
+    HRIS_ROLES_TABLE: ${env:HRIS_ROLES_TABLE, 'hris_roles'}
+    HRIS_SETTINGS_TABLE: ${env:HRIS_SETTINGS_TABLE, 'hris_settings'}
+    S3_BUCKET: ${env:S3_BUCKET, 'hris-documents'}
 
   iamRoleStatements:
     - Effect: Allow
@@ -23,23 +26,20 @@ provider:
         - dynamodb:PutItem
         - dynamodb:GetItem
         - dynamodb:Scan
+        - dynamodb:Query
         - dynamodb:DeleteItem
         - dynamodb:UpdateItem
+        - dynamodb:BatchGetItem
+        - dynamodb:BatchWriteItem
       Resource:
-        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:EMPLOYEES_TABLE}
-        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:ONBOARDING_TABLE}
-        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:LEAVE_TABLE}
-        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:PAYROLL_TABLE}
-        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:ASSETS_TABLE}
-        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:CANDIDATES_TABLE}
-        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:TRAININGS_TABLE}
-        - arn:aws:dynamodb:${self:provider.region}:*:table/${env:DOCUMENTS_TABLE}
+        - arn:aws:dynamodb:${self:provider.region}:*:table/hris_*
     - Effect: Allow
       Action:
         - s3:PutObject
         - s3:GetObject
         - s3:PutObjectAcl
-      Resource: arn:aws:s3:::${env:S3_BUCKET}/*
+        - s3:DeleteObject
+      Resource: arn:aws:s3:::${env:S3_BUCKET, 'hris-documents'}/*
 
 functions:
   app:
